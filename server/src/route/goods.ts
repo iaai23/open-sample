@@ -1,27 +1,36 @@
 import * as Express from 'express';
 import mongodbClient from '../common/mongodbClient';
 import { GoodsModel } from '../models/goodsModel';
+import { SECRET_KEY } from '../index';
 
-var router = Express.Router();
+const router = Express.Router();
+const jwt = require("jsonwebtoken");
 
-// 遷移時に認証チェックを行う関数
-function isLogined(req, res, next) {
-    if(req.isAuthenticated()) {
-      // 既に認証済みなら対象の URL へのアクセスを許可する
-      next();
+// ➃認証用ミドルウェア
+const auth = (req, res, next) => {
+    // リクエストヘッダーからトークンの取得
+    let token = '';
+    if (req.headers.authorization &&
+        req.headers.authorization.split(' ')[0] === 'Bearer') {
+        token = req.headers.authorization.split(' ')[1];
+    } else {
+        return next('token none');
     }
-    else {
-      console.error('認証未済', Error);
-      // Angular の HttpClient でエラーコールバックに反応させるため 401 を返す
-      res.status(401);
-      // HttpClient のエラー時に取得できるエラーメッセージを返す
-      res.send({
-        error: '認証してください'
-      });
-    }
+
+    // トークンの検証
+    jwt.verify(token, SECRET_KEY, function(err, decoded) {
+        if (err) {
+            // 認証NGの場合
+            next(err.message);
+        } else {
+            // 認証OKの場合
+            req.decoded = decoded;
+            next();
+        }
+    });
 }
 
-router.post('/', isLogined,(req, res, next) => {
+router.post('/', auth,(req, res, next) => {
     console.log("Server add");
 
     const name = req.body.name;
@@ -61,7 +70,7 @@ router.post('/', isLogined,(req, res, next) => {
     });
 });
 
-router.get('/:id', isLogined,(req, res, next) => {
+router.get('/:id', auth, (req, res, next) => {
     console.log("Server detail");
     const goods_id = req.params.id;
 
@@ -91,7 +100,7 @@ router.get('/:id', isLogined,(req, res, next) => {
     });
 });
 
-router.put('/:id', isLogined,(req, res, next) => {
+router.put('/:id', auth, (req, res, next) => {
     console.log("Server edit");
     const goods_id = req.params.id;
 
@@ -135,7 +144,7 @@ router.put('/:id', isLogined,(req, res, next) => {
     });
 });
 
-router.post('/search', isLogined,(req, res, next) => {
+router.post('/search', auth, (req, res, next) => {
     console.log("Server search all");
 
     mongodbClient((err, client, db) => {
